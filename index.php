@@ -22,32 +22,50 @@ if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 		die("The auth provider did not send a preferred_username token");
 	}
 }
-if(isset($_POST['pwd'])) {
-	//@todo: create the token and put it in _SESSION
-}
 echo "<pre>Welkom:";
 print_r($_SESSION['username']);
+if(isset($_POST['pwd'])) {
+	//@todo: create the token and put it in _SESSION
+	$replacements = array('#USER#'=>$_SESSION['username'],'#PASSWORD#'=>$_POST['pwd']);
+	$tokenArray = $connection;
+	array_walk_recursive($tokenArray,function(&$item,$key){
+		global $replacements;
+		if(is_string($item)) {
+			$item=str_replace(array_keys($replacements),array_values($replacements),$item);
+		}
+	});
+
+	$binkey = sodium_hex2bin($config['key']);
+	$token = json_encode($tokenArray,JSON_PRETTY_PRINT);
+	echo "Token:$token\n";
+
+	$hash = hash_hmac('sha256',$token,$binkey,true);
+	//echo "Hash:$hash\n";
+	$cipher = "aes-128-cbc";
+	if (in_array($cipher, openssl_get_cipher_methods())) {
+		$iv = sodium_hex2bin("00000000000000000000000000000000");
+		$cyphertext = openssl_encrypt($hash.$token, $cipher, $binkey, $options=OPENSSL_RAW_DATA, $iv);
+		$_SESSION['token'] = sodium_bin2base64($cyphertext,SODIUM_BASE64_VARIANT_ORIGINAL);
+	}
+
+}
 
 
 
-if(!isset($_SESSION['token'])) {
+//if(!isset($_SESSION['token'])) {
 ?> 
-	<form method="post" action="/">
+	<form method="post" action="/?pastetoken">
 		Wachtwoord nodig voor beveiligde verbinding<input type="password" name="pwd"/>
 		<input type="submit"/>
 	</form>
 
 <?php
-} else {
-	print_r($_SESSION['token']);
-}
-
-if(isset($_GET['pastetoken']) ){
+//} 
 ?>
-<form method="post" action="/guacamole/#/" >
+<form method="get" action="/guacamole/#/" >
 <textarea name="data" rows="10" cols="30" placeholder="-- paste token here --">
+<?php echo $_SESSION['token']; ?>
 </textarea>
 <input type="submit"/>
 </form>
 <?php
-}
