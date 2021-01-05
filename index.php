@@ -22,10 +22,12 @@ if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 		die("The auth provider did not send a preferred_username token");
 	}
 }
-echo "<pre>Welkom:";
-print_r($_SESSION['username']);
+
+
+
+
 if(isset($_POST['pwd'])) {
-	//@todo: create the token and put it in _SESSION
+	//Password was posted: create the token and put it in _SESSION
 	$replacements = array('#USER#'=>$_SESSION['username'],'#PASSWORD#'=>$_POST['pwd']);
 	$tokenArray = $connection;
 	array_walk_recursive($tokenArray,function(&$item,$key){
@@ -37,7 +39,6 @@ if(isset($_POST['pwd'])) {
 
 	$binkey = sodium_hex2bin($config['key']);
 	$token = json_encode($tokenArray,JSON_PRETTY_PRINT);
-	echo "Token:$token\n";
 
 	$hash = hash_hmac('sha256',$token,$binkey,true);
 	//echo "Hash:$hash\n";
@@ -48,24 +49,62 @@ if(isset($_POST['pwd'])) {
 		$_SESSION['token'] = sodium_bin2base64($cyphertext,SODIUM_BASE64_VARIANT_ORIGINAL);
 	}
 
+	//Clean all the funky stuff from memory.
+	sodium_memzero($config['key']);
+	sodium_memzero($token);
+	sodium_memzero($hash);
+	sodium_memzero($replacements['#PASSWORD#']);
+	sodium_memzero($_POST['pwd']);
+	array_walk_recursive($tokenArray,function(&$item,$key){
+		if(is_string($item)) {
+			sodium_memzero($item);
+		}
+	});
 }
 
+if(isset($_POST['logon']) && isset($_SESSION['token'])) {
+	//header("Location: /guacamole/#/?data=".urlencode($_SESSION['token']));
 
+	
+	echo "<h1>Redirect failed</h1>";
 
-//if(!isset($_SESSION['token'])) {
+echo '<form name="_autologon" method="get" action="/guacamole/" target="_rdp_connection">';
+echo '<input type="hidden" name="data" value="'.$_SESSION['token'].'" >';
+echo '</form>';
+?>
+<script type="text/javascript">
+window.onload=function(){
+	document.forms["_autologon"].submit();
+};
+</script>
+<?php
+}
+
+if(isset($_POST['removetoken'])) {
+	sodium_memzero($_SESSION['token']);
+	unset($_SESSION['token']);
+}
+
+echo "<pre>Welkom:";
+print_r($_SESSION['username']);
+
+if(!isset($_SESSION['token'])) {
+
 ?> 
-	<form method="post" action="/?pastetoken">
+	<form method="post" action="/">
 		Wachtwoord nodig voor beveiligde verbinding<input type="password" name="pwd"/>
-		<input type="submit"/>
 	</form>
 
 <?php
-//} 
+} else {
 ?>
-<form method="get" action="/guacamole/#/" >
-<textarea name="data" rows="10" cols="30" placeholder="-- paste token here --">
-<?php echo $_SESSION['token']; ?>
-</textarea>
-<input type="submit"/>
+<form method="post" action="/" target="_rdp_connection">
+<input type="submit" name="logon" value="Aanmelden" >
+</form>
+<form method="post" action="/" >
+<input type="submit" name="removetoken" value="nieuw token" >
 </form>
 <?php
+}
+
+
