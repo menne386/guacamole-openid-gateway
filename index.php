@@ -77,6 +77,12 @@ function htmlfooter() {
 <?php
 }
 
+function cleanmem(&$item) {
+	if(isset($item) && is_string($item)) {
+		sodium_memzero($item);
+	}
+}
+
 
 #Check if we have a username in the session: if not: login with openID:
 if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
@@ -126,16 +132,14 @@ if(isset($_POST['pwd']) && isset($_SESSION['username'])) {
 	}
 
 	#Clean all the secret stuff from memory:
-	sodium_memzero($binkey);
-	sodium_memzero($token);
-	sodium_memzero($hash);
-	sodium_memzero($replacements['#PASSWORD#']);
-	sodium_memzero($_POST['pwd']);
-	sodium_memzero($config['key']);
+	cleanmem($binkey);
+	cleanmem($token);
+	cleanmem($hash);
+	cleanmem($replacements['#PASSWORD#']);
+	cleanmem($_POST['pwd']);
+	cleanmem($config['key']);
 	array_walk_recursive($tokenArray,function(&$item,$key){
-		if(is_string($item)) {
-			sodium_memzero($item);
-		}
+		cleanmem($item);
 	});
 	if(isset($_SESSION['token'])) {		
 		#We have a token in the session: redirect to main page:
@@ -146,12 +150,12 @@ if(isset($_POST['pwd']) && isset($_SESSION['username'])) {
 }
 
 #From this point on in the script, we will never need the secret key again, forget it:
-sodium_memzero($config['key']);
+cleanmem($config['key']);
 
 #If we post or get with "removetoken" parameter: all session stuff is destroyed.
 if(isset($_REQUEST['removetoken'])) {
-	sodium_memzero($_SESSION['token']);
-	sodium_memzero($_SESSION['guacsession']);
+	cleanmem($_SESSION['token']);
+	cleanmem($_SESSION['guacsession']);
 	unset($_SESSION['token']);
 	unset($_SESSION['guacsession']);
 	unset($_SESSION['username']);
@@ -163,7 +167,7 @@ if(isset($_REQUEST['removetoken'])) {
 $app = isset($_REQUEST['open']) ? $_REQUEST['open']: false;
 if($app && isset($_SESSION['token']) && isset($connection['connections'][$app]) ) {
 	#@todo: hardcoded api URL
-	$apiUrl = "http://localhost:8080/guacamole/api/tokens";
+	$apiUrl = "http://127.0.0.1:8080/guacamole/api/tokens";
 	
 	#encode the app name for guacamole
 	$appDirector=base64_encode("$app\0c\0json");
