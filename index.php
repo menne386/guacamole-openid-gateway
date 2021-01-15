@@ -20,6 +20,7 @@ function htmlheader() {
 <html>
 <head>
 	<title>RDP-App-Redirector</title>
+	<meta http-equiv="refresh" content="180"/>
 	<style>
 	html{
 		font-family: sans-serif;
