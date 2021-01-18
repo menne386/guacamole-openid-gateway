@@ -204,7 +204,14 @@ if($app && isset($_SESSION['token']) && isset($connection['connections'][$app]) 
 			echo "<pre>error: $result</pre>";
 		} else {
 			$_SESSION['guacsession'] = $res['authToken'];
-			#fresh guacsession open the app with the token in the URL:
+			#fresh guacsession open the app with the token in the URL: @TODO: dont put it in the URL: put it in localStorage.setItem("GUAC_AUTH", "Smith");
+			htmlheader();
+			echo "<script>";
+			echo 'window.localStorage.setItem("GUAC_AUTH", \''.$result.'\');';
+			echo 'window.location.href = "/guacamole/#/client/'.$appDirector.'";';
+			echo "</script>";
+			htmlfooter();
+			die();
 			header("Location: /guacamole/#/client/".$appDirector."?token=".urlencode($_SESSION['guacsession']));
 			die("Redirect...");
 		}
