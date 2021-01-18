@@ -7,7 +7,9 @@ define('_GATEWAY',true);
 require_once("config.php");
 
 #start a session: the date in sessionname will invalidate & restart sessions 00:00 every day.
-session_name(md5(date('dmY').md5($config['app-id'])));
+#  The REMOTE_ADDR bit will ensure that hackers from other systems will not break into the session
+#  It is advised that session are stored in a redis server/cluster WITHOUT PERSISTENCE
+session_name(hash("sha256",date('dmY').":".$config['app-id'].":".$_SERVER['REMOTE_ADDR']));
 session_start();
 
 #Load classes for openID
