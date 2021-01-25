@@ -17,12 +17,12 @@ require __DIR__ . '/vendor/autoload.php';
 use Jumbojett\OpenIDConnectClient;
 
 #this function displays a basic HTML header with some minimal styling
-function htmlheader() {
+function htmlheader($refresh = 180) {
 ?><!DOCTYPE html>
 <html>
 <head>
 	<title>RDP-App-Redirector</title>
-	<meta http-equiv="refresh" content="180"/>
+	<meta http-equiv="refresh" content="<?php echo $refresh; ?>"/>
 	<style>
 	html{
 		font-family: sans-serif;
@@ -85,23 +85,45 @@ function cleanmem(&$item) {
 	}
 }
 
-
 #Check if we have a username in the session: if not: login with openID:
 if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
-	$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
-		$config['app-id'],
-		null);
-	$oidc->setResponseTypes(array('id_token'));
-	$oidc->addScope(array('openid','email','profile'));
-	$oidc->setAllowImplicitFlow(true);
-	$oidc->addAuthParam(array('response_mode' => 'form_post'));
-	$oidc->authenticate();
-
-	$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
-	$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
-	if($_SESSION['username']=="") {
-		die("The auth provider did not send a preferred_username token");
+	if(isset($_POST['login']) || isset($_SESSION['do_login'])) {
+		$_SESSION['do_login']=true;
+		$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
+			$config['app-id'],
+			null);
+		$oidc->setResponseTypes(array('id_token'));
+		$oidc->addScope(array('openid','email','profile'));
+		$oidc->setAllowImplicitFlow(true);
+		$oidc->addAuthParam(array('response_mode' => 'form_post'));
+		$oidc->authenticate();
+		
+		$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
+		$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
+		if($_SESSION['username']=="") {
+			die("The auth provider did not send a preferred_username token");
+		}
+		htmlheader();
+		echo '<script>window.close();</script>This page can be closed, you are authenticated.';
+		htmlfooter();
+		die();
+	} else {
+		htmlheader(1);
+	?> 
+		<br/><br/>
+		<form name="autologon" class="loginform" method="post" action="/" title="Aanmelden" target="_blank">
+			<div class="shield">
+			<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Wachtwoord:</span>
+			</div>
+			<input type="hidden" name="login" value="true" />
+			<script>document.autologon.submit();</script>
+		</form>
+	<?php	
+		htmlfooter();
+		die();
 	}
+} else {
+	unset($_SESSION['do_login']);
 }
 
 #Check if a password was posted and username is set:
