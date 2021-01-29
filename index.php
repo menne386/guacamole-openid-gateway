@@ -9,7 +9,31 @@ require_once("config.php");
 #start a session: the date in sessionname will invalidate & restart sessions 00:00 every day.
 #  The REMOTE_ADDR bit will ensure that hackers from other systems will not break into the session
 #  It is advised that session are stored in a redis server/cluster WITHOUT PERSISTENCE
-session_name(hash("sha256",date('dmY').":".$config['app-id'].":".$_SERVER['REMOTE_ADDR']));
+
+$secure = true; # if you only want to receive the cookie over HTTPS
+$httponly = true; # prevent JavaScript access to session cookie
+$samesite = 'none';
+$hostname = $config['app-domain'];
+
+header("Access-Control-Allow-Origin: https://login.microsoftonline.com:443");
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type, Cookie , *");
+
+session_name(hash("sha1",date('dmY').":".$config['app-id'].":".$_SERVER['REMOTE_ADDR']));
+
+if(PHP_VERSION_ID < 70300) {
+	session_set_cookie_params(0, '/; samesite='.$samesite, $hostname, $secure, $httponly);
+} else {
+	session_set_cookie_params([
+		'lifetime' => 0,
+		'path' => '/',
+		'domain' => $hostname,
+		'secure' => $secure,
+		'httponly' => $httponly,
+		'samesite' => $samesite
+	]);
+}
 session_start();
 
 #Load classes for openID
@@ -22,7 +46,6 @@ function htmlheader($refresh = 180) {
 <html>
 <head>
 	<title>RDP-App-Redirector</title>
-	<meta http-equiv="refresh" content="<?php echo $refresh; ?>"/>
 	<style>
 	html{
 		font-family: sans-serif;
@@ -66,7 +89,28 @@ function htmlheader($refresh = 180) {
 		width: 8em;
 	}
 	</style>
-	<script src="//code.iconify.design/1/1.0.6/iconify.min.js"></script>
+	<script src="/iconify.min.js"></script>
+	<script>
+	function checkSession() {
+		var xhttp = new XMLHttpRequest();
+		xhttp.responseType = 'text';
+		xhttp.overrideMimeType("application/json");
+		xhttp.onreadystatechange = function() {
+			if (this.readyState == 4 && this.status == 200) {
+				var jsonResponce = JSON.parse(this.responseText);
+				//console.log();
+				if(jsonResponce['result']!='ok') {
+					window.location = '/?removetoken';
+				}
+			}
+		};
+		xhttp.open("GET", "/?checkSession", true);
+		xhttp.send();
+	}
+	setInterval(checkSession, 10000);
+	setTimeout(checkSession, 1000);
+	
+	</script>
 </head>
 <body>
 <?php
@@ -85,38 +129,58 @@ function cleanmem(&$item) {
 	}
 }
 
+#session checkup.
+if(isset($_REQUEST['checkSession'])) {
+	if(isset($_SESSION['ctr'])) {
+		$_SESSION['ctr']++;
+		die('{"result":"ok","ctr":'.$_SESSION['ctr'].'}');
+	}
+	
+	die('{"result":"error"}');
+}
+if(!isset($_SESSION['ctr'])) {
+	$_SESSION['ctr'] = (int)1;
+}
+
+
 #Check if we have a username in the session: if not: login with openID:
 if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
-	if(isset($_POST['login']) || isset($_SESSION['do_login'])) {
-		$_SESSION['do_login']=true;
-		$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
-			$config['app-id'],
-			null);
-		$oidc->setResponseTypes(array('id_token'));
-		$oidc->addScope(array('openid','email','profile'));
-		$oidc->setAllowImplicitFlow(true);
-		$oidc->addAuthParam(array('response_mode' => 'form_post'));
-		$oidc->authenticate();
-		
-		$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
-		$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
-		if($_SESSION['username']=="") {
-			die("The auth provider did not send a preferred_username token");
+	if(isset($_POST['login']) || isset($_POST['id_token'])|| isset($_POST['state'])|| isset($_POST['session_state'])) {
+		try{
+			$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
+				$config['app-id'],
+				null);
+			$oidc->setResponseTypes(array('id_token'));
+			$oidc->addScope(array('openid','email','profile'));
+			$oidc->setAllowImplicitFlow(true);
+			$oidc->addAuthParam(array('response_mode' => 'form_post'));
+			$oidc->authenticate();
+			
+			$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
+			$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
+			if($_SESSION['username']=="") {
+				die("The auth provider did not send a preferred_username token");
+			}
+			htmlheader();
+			echo '<script>window.opener.location.reload(false);window.close();</script>This page can be closed, you are authenticated as '.$_SESSION['displayname'];
+			htmlfooter();
+			die();
+		} catch(Exception $e) {
+			die("Failed to authenticate from ".$_SERVER['HTTP_REFERER']);
 		}
-		htmlheader();
-		echo '<script>window.close();</script>This page can be closed, you are authenticated.';
-		htmlfooter();
-		die();
 	} else {
-		htmlheader(1);
+		htmlheader(180);
 	?> 
 		<br/><br/>
-		<form name="autologon" class="loginform" method="post" action="/" title="Aanmelden" target="_blank">
-			<div class="shield">
-			<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Wachtwoord:</span>
-			</div>
-			<input type="hidden" name="login" value="true" />
-			<script>document.autologon.submit();</script>
+		<form name="autologon" class="loginform" method="post" action="/" title="Logon" target="_blank">
+			<a href="javascript: document.autologon.submit();">
+				<div class="shield">
+					<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Password:</span>
+				</div>
+				<input type="hidden" name="login" value="true" />
+				Click here if authentication popup did not open.
+				<script>document.autologon.submit();</script>
+			</a>
 		</form>
 	<?php	
 		htmlfooter();
@@ -260,17 +324,17 @@ htmlheader();
 if(!isset($_SESSION['token'])) {
 	#We dont have a valid token yet: present a lock screen with a password box:
 ?> 
-	<br/><br/>
-	<form class="loginform" method="post" action="/" title="Uw wachtwoord is nodig voor het openen van beveiligde applicaties">
+	<form class="loginform" method="post" action="/" title="Your password is required for secure apps">
+		<h3><?php echo $_SESSION['displayname'];?></h3>
 		<div class="shield">
-		<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Wachtwoord:</span>
+		<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Password:</span>
 		</div>
 		<input class="passwordbox" type="password"  name="pwd"/>
 	</form>
 <?php
 } else {
 	#We do have a valid token: present list of apps in token configuration:
-	echo '<a class="rr" href="/?removetoken"><span class="iconify" data-icon="mdi-shield-lock" title="Afmelden voor apps">lock</span></a>';
+	echo '<a class="rr" href="/?removetoken"><span class="iconify" data-icon="mdi-shield-lock" title="Logoff for apps">lock</span></a>';
 	foreach($connection['connections'] as $name=>$conf) {
 		echo '<a class="ll" href="/?open='.$name.'" target="__'.$name.'" title="'.$name.'"><div class="app"><div><span class="iconify" data-icon="'.$conf['parameters']['icon'].'">'.$name.'</span></div>'.$name.'</div></a>';
 	}

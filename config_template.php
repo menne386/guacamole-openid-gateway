@@ -5,6 +5,7 @@ if(!defined('_GATEWAY')) {
 }
 
 $config=array(
+	'app-domain' => 'thedomainthissiterunsons.nl',
 	'domain' => 'tennantdomain.com',
 	'app-id' => 'azure app registration id',
 	'claim'  => 'preferred_username',
