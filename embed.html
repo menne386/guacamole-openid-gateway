@@ -1,0 +1,10 @@
+<form name="autologon" class="loginform" method="post" action="https://openid-gateway-url.com/" title="Unlocking..." >
+	<a href="javascript: document.autologon.submit();">
+		<div class="shield">
+			<span class="iconify largeicon" data-icon="mdi-refresh">Unlocking...</span>
+		</div>
+		<input type="hidden" name="login" value="true" />
+		Click here if authentication window did not open.
+		<script>document.autologon.submit();</script>
+	</a>
+</form>
