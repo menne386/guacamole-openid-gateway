@@ -107,7 +107,7 @@ function htmlheader($refresh = 180) {
 		xhttp.open("GET", "/?checkSession", true);
 		xhttp.send();
 	}
-	setInterval(checkSession, 10000);
+	setInterval(checkSession, 60000);
 	setTimeout(checkSession, 2000);
 	
 	</script>
