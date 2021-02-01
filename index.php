@@ -162,33 +162,17 @@ if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 			if($_SESSION['username']=="") {
 				die("The auth provider did not send a preferred_username token");
 			}
-			if(isset($_SESSION['returnurl'])) {
-				//Assume we were opene
-				header("Location: ".$_SESSION['returnurl']);
-				die("redirect...");
-			} else {
-				htmlheader();
-				echo '<script>window.opener.location.reload(false);window.close();</script>This page can be closed, you are authenticated as '.$_SESSION['displayname'];
-				htmlfooter();
-				die();
-			}
+			header("Location: /");
+			die("redirect...");
 		} catch(Exception $e) {
 			die("Failed to authenticate from ".$_SERVER['HTTP_REFERER']);
 		}
 	} else {
 		//Display form for openID auth... this will try to escape any iframe we are in:
-		$target = "_blank";
-		if(isset($_SERVER['HTTP_REFERER']) && strpos($config['embedme'],$_SERVER['HTTP_REFERER'])!==false) {
-			//If we are opened from the embed url, return to this URL:
-			$_SESSION['returnurl'] = $config['embedme'];
-		}
-		if(isset($_SESSION['returnurl'])) {
-			$target = "_top";
-		}
 		htmlheader(180);
 	?> 
 		<br/><br/>
-		<form name="autologon" class="loginform" method="post" action="/" title="Unlocking..." target="<?php echo $target; ?>">
+		<form name="autologon" class="loginform" method="post" action="/" title="Unlocking..." target="_top">
 			<a href="javascript: document.autologon.submit();">
 				<div class="shield">
 					<span class="iconify largeicon" data-icon="mdi-refresh">Unlocking...</span>
@@ -260,7 +244,6 @@ if(isset($_REQUEST['removetoken'])) {
 	cleanmem($_SESSION['guacsession']);
 	unset($_SESSION['token']);
 	unset($_SESSION['guacsession']);
-	unset($_SESSION['username']);
 	header('Location: /');
 	die('Redirect...');
 }
@@ -337,12 +320,12 @@ htmlheader();
 if(!isset($_SESSION['token'])) {
 	#We dont have a valid token yet: present a lock screen with a password box:
 ?> 
-	<form class="loginform" method="post" action="/" title="Your password is required for secure apps">
+	<form class="loginform" method="post" action="/" title="Your password is required for secure apps" >
 		<h3><?php echo $_SESSION['displayname'];?></h3>
 		<div class="shield">
 		<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Password:</span>
 		</div>
-		<input class="passwordbox" type="password"  name="pwd"/>
+		<input class="passwordbox" type="password" readonly onfocus="this.removeAttribute('readonly');" name="pwd"/>
 	</form>
 <?php
 } else {
