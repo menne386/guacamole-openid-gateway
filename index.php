@@ -302,11 +302,11 @@ if($app && isset($_SESSION['token']) && isset($connection['connections'][$app]) 
 		$res = json_decode($result,true);
 		if(!isset($res['authToken'])) {
 			#No authToken received from API: cannot login
-			echo "<h1>Token is niet (meer) geldig, meld u opnieuw aan.</h1>";
-			echo "<pre>error: $result</pre>";
+			echo "<h1>Token is not valid, please login again.</h1>";
+			die();
 		} else {
 			$_SESSION['guacsession'] = $res['authToken'];
-			#fresh guacsession open the app with the token in the URL: @TODO: dont put it in the URL: put it in localStorage.setItem("GUAC_AUTH", "Smith");
+			#fresh guacsession open the app with the token in the URL: dont put it in the URL: put it in localStorage.setItem("GUAC_AUTH", "Smith");
 			htmlheader();
 			echo "<script>";
 			echo 'window.localStorage.setItem("GUAC_AUTH", \''.$result.'\');';
@@ -314,8 +314,6 @@ if($app && isset($_SESSION['token']) && isset($connection['connections'][$app]) 
 			echo "</script>";
 			htmlfooter();
 			die();
-			header("Location: /guacamole/#/client/".$appDirector."?token=".urlencode($_SESSION['guacsession']));
-			die("Redirect...");
 		}
 	}
 	
@@ -325,7 +323,8 @@ if($app && isset($_SESSION['token']) && isset($connection['connections'][$app]) 
 		die("Redirect...");
 	} else {
 		#We dont have a valid guacsession:
-		echo "<h1>Sessie is niet geldig, meld u opnieuw aan.</h1>";
+		echo "<h1>Session invalid, please login again.</h1>";
+		die();
 	}
 }
 
