@@ -89,7 +89,7 @@ function htmlheader($refresh = 180) {
 		width: 8em;
 	}
 	</style>
-	<script src="/iconify.min.js"></script>
+	<script async src="/iconify.min.js"></script>
 	<script>
 	function checkSession() {
 		var xhttp = new XMLHttpRequest();
@@ -108,7 +108,7 @@ function htmlheader($refresh = 180) {
 		xhttp.send();
 	}
 	setInterval(checkSession, 10000);
-	setTimeout(checkSession, 1000);
+	setTimeout(checkSession, 2000);
 	
 	</script>
 </head>
@@ -146,6 +146,7 @@ if(!isset($_SESSION['ctr'])) {
 #Check if we have a username in the session: if not: login with openID:
 if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 	if(isset($_POST['login']) || isset($_POST['id_token'])|| isset($_POST['state'])|| isset($_POST['session_state'])) {
+		//Do microsoft openID auth
 		try{
 			$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
 				$config['app-id'],
@@ -161,24 +162,39 @@ if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 			if($_SESSION['username']=="") {
 				die("The auth provider did not send a preferred_username token");
 			}
-			htmlheader();
-			echo '<script>window.opener.location.reload(false);window.close();</script>This page can be closed, you are authenticated as '.$_SESSION['displayname'];
-			htmlfooter();
-			die();
+			if(isset($_SESSION['returnurl'])) {
+				//Assume we were opene
+				header("Location: ".$_SESSION['returnurl']);
+				die("redirect...");
+			} else {
+				htmlheader();
+				echo '<script>window.opener.location.reload(false);window.close();</script>This page can be closed, you are authenticated as '.$_SESSION['displayname'];
+				htmlfooter();
+				die();
+			}
 		} catch(Exception $e) {
 			die("Failed to authenticate from ".$_SERVER['HTTP_REFERER']);
 		}
 	} else {
+		//Display form for openID auth... this will try to escape any iframe we are in:
+		$target = "_blank";
+		if(isset($_SERVER['HTTP_REFERER']) && strpos($config['embedme'],$_SERVER['HTTP_REFERER'])!==false) {
+			//If we are opened from the embed url, return to this URL:
+			$_SESSION['returnurl'] = $config['embedme'];
+		}
+		if(isset($_SESSION['returnurl'])) {
+			$target = "_top";
+		}
 		htmlheader(180);
 	?> 
 		<br/><br/>
-		<form name="autologon" class="loginform" method="post" action="/" title="Logon" target="_blank">
+		<form name="autologon" class="loginform" method="post" action="/" title="Unlocking..." target="<?php echo $target; ?>">
 			<a href="javascript: document.autologon.submit();">
 				<div class="shield">
-					<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Password:</span>
+					<span class="iconify largeicon" data-icon="mdi-refresh">Unlocking...</span>
 				</div>
 				<input type="hidden" name="login" value="true" />
-				Click here if authentication popup did not open.
+				Click here if authentication window did not open.
 				<script>document.autologon.submit();</script>
 			</a>
 		</form>
@@ -186,8 +202,6 @@ if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
 		htmlfooter();
 		die();
 	}
-} else {
-	unset($_SESSION['do_login']);
 }
 
 #Check if a password was posted and username is set:

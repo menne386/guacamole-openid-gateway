@@ -7,6 +7,7 @@ if(!defined('_GATEWAY')) {
 $config=array(
 	'app-domain' => 'thedomainthissiterunsons.nl',
 	'domain' => 'tennantdomain.com',
+	'embedme'=> 'The URL to the parent application, will redirect to this url after login!',
 	'app-id' => 'azure app registration id',
 	'claim'  => 'preferred_username',
 	'key'    => 'Amazing secret key in hex',
@@ -21,6 +22,7 @@ $connection = array(
 			"protocol"=>"rdp",
 			"id" => '#USER#_'.time(),
 			"parameters" => array(
+				"icon" => "mdi-account",
 				"hostname" => "The host we are connecting to",
 				"client-name"=> "GUAC_#USER#",
 				"domain"=> "The domain we are connecting to",
