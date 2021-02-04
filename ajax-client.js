@@ -33,11 +33,6 @@ function makeRequest(method, url, post=null) {
     });
 }
 
-
-function openurl(url) {
-	window.location = url;
-}
-
 async function main() {
 	
 	var settingsOutput = await makeRequest("GET","/?getConfig");
@@ -62,6 +57,11 @@ async function main() {
 		pwd.style.display = "none";
 		logonUI.title = "Click to authenticate with Microsoft";
 		logonUI.target = "__logonTab";
+		var hiddenLogon = document.createElement('input');
+		hiddenLogon.type="hidden";
+		hiddenLogon.name="login";
+		hiddenLogon.value="newTab";
+		logonUI.appendChild(hiddenLogon);
 		logonUI.onclick = function() {
 			logonUI.submit();
 		}
@@ -82,7 +82,7 @@ function renderAppList(resultObj) {
 	//echo '<a class="rr" href="/?removetoken"><span class="iconify" data-icon="mdi-shield-lock" title="Logoff for apps">lock</span></a>';
 	var closeLink = document.createElement('a');
 	closeLink.className = "rr";
-	closeLink.href="javascript:deleteToken();";
+	closeLink.onclick = deleteToken;
 	var closeIcon = document.createElement('span');
 	closeIcon.className='iconify';
 	closeIcon.setAttribute('data-icon','mdi-shield-lock');
@@ -95,9 +95,10 @@ function renderAppList(resultObj) {
 		//echo '<a class="ll" href="/?open='.$name.'" target="__'.$name.'" title="'.$name.'"><div class="app"><div><span class="iconify" data-icon="'.$conf['parameters']['icon'].'">'.$name.'</span></div>'.$name.'</div></a>';
 		var appLink = document.createElement('a');
 		appLink.className = "ll";
-		//appLink.target = "APP_"+app.name;
-		appLink.href="javascript:openApp('"+app.name+"');";
+		appLink.href= app.url;
 		appLink.title = app.name;
+		appLink.target = "App_"+app.name;
+		
 		var outerDiv = document.createElement('div');
 		outerDiv.className = "app";
 		appLink.appendChild(outerDiv);
@@ -107,17 +108,19 @@ function renderAppList(resultObj) {
 		outerDiv.appendChild(appIcon);
 		
 		UI.appendChild(appLink);
-		//console.log(app);
-	});	
+		console.log(app);
+	});
+
+	openSession();
+	setInterval(openSession,30000);
 }
 
 
 async function createNewToken() {
 	var pwd = document.querySelector("#passwordentry");
-	var UI = document.querySelector("#UI");
 	pwd.disabled = true;
 	var fd = new FormData();
-	fd.set('data', JSON.stringify({'pwd': pwd.value}));
+	fd.set('pwd',  pwd.value);
 	var result = await makeRequest("POST","/?createToken",fd);
 	//console.log(result);
 	var resultObj = JSON.parse(result);
@@ -127,6 +130,33 @@ async function createNewToken() {
 		alert("Error: "+resultObj.message);
 	}
 	pwd.disabled = false;
+}
+
+async function openSession() {
+	//alert("Would have opened "+appName);
+	var fd = new FormData();
+	var GT = localStorage.getItem('GUAC_AUTH');
+	if(GT) {
+		//We already have a guac authToken: send it with the request:
+		var gtObj = JSON.parse(GT);
+		fd.set('authToken', gtObj.authToken);
+	}
+	var result = await makeRequest("POST","/?openSession",fd);
+	var resultObj = JSON.parse(result);
+	//console.log(resultObj);
+	if(resultObj.status=='ok') {
+		if(resultObj.GT) {
+			localStorage.setItem('GUAC_AUTH',resultObj.GT);
+		}
+	} else {
+		console.log(resultObj);
+		deleteToken();
+	}
+	return false;
+}
+
+async function deleteToken() {
+	alert("Would have deleted token now");
 }
 
 main();

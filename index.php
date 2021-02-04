@@ -39,31 +39,39 @@ require __DIR__ . '/vendor/autoload.php';
 use Jumbojett\OpenIDConnectClient;
 
 #Check if we have a username in the session: if not: login with openID:
-if(!isset($_SESSION['username']) || $_SESSION['username']=="") {
-	if(isset($_POST['login']) || isset($_POST['id_token'])|| isset($_POST['state'])|| isset($_POST['session_state'])) {
-		#Do microsoft openID auth
-		try{
-			$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
-				$config['app-id'],
-				null);
-			$oidc->setResponseTypes(array('id_token'));
-			$oidc->addScope(array('openid','email','profile'));
-			$oidc->setAllowImplicitFlow(true);
-			$oidc->addAuthParam(array('response_mode' => 'form_post'));
-			$oidc->authenticate();
-			
-			$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
-			$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
-			if($_SESSION['username']=="" || $_SESSION['displayname']) {
-				die("The auth provider did not send a ".$config['claim']." or a ".$config['displayclaim']." claim");
-			}
-			header("Location: /");
-			die("Redirect...");
-		} catch(Exception $e) {
-			die("Failed to authenticate from ".$_SERVER['HTTP_REFERER']);
+
+if(isset($_POST['login']) || isset($_POST['id_token'])|| isset($_POST['state'])|| isset($_POST['session_state'])) {
+	if(isset($_POST['login'])) {
+		$_SESSION['loginType']=$_POST['login'];
+	}
+	#Do microsoft openID auth
+	try{
+		$oidc = new OpenIDConnectClient('https://login.microsoftonline.com/'.$config['domain'].'/v2.0',
+			$config['app-id'],
+			null);
+		$oidc->setResponseTypes(array('id_token'));
+		$oidc->addScope(array('openid','email','profile'));
+		$oidc->setAllowImplicitFlow(true);
+		$oidc->addAuthParam(array('response_mode' => 'form_post'));
+		$oidc->authenticate();
+		
+		$_SESSION['username']=$oidc->getVerifiedClaims($config['claim']);
+		$_SESSION['displayname'] = $oidc->getVerifiedClaims($config['displayclaim']);
+		if($_SESSION['username']=="" || $_SESSION['displayname'] == "") {
+			die("The auth provider did not send a ".$config['claim']." or a ".$config['displayclaim']." claim");
 		}
+		if(isset($_SESSION['loginType']) && $_SESSION['loginType']=="newTab") {
+			echo '<script>window.opener.location.reload(); window.close();</script>';
+			die();
+			
+		}
+		header("Location: /");
+		die("Redirect...");
+	} catch(Exception $e) {
+		die("Failed to authenticate from ".$_SERVER['HTTP_REFERER']);
 	}
 }
+
 
 function cleanmem(&$item) {
 	if(isset($item) && is_string($item)) {
@@ -71,16 +79,32 @@ function cleanmem(&$item) {
 	}
 }
 
+function getApps() {
+	global $connection;
+	
+	$appArray = array();
+	foreach($connection['connections'] as $name=>$conf) {
+		$appArray[] = array(
+			"name"=>$name,
+			'icon'=>$conf['parameters']['icon'],
+			'url'=>'/guacamole/#/client/'.base64_encode("$name\0c\0json")
+		);
+	}
+	return $appArray;
+}
 
 if(isset($_REQUEST['createToken'])) {
 	header('Content-Type: application/json');
-	if(isset($_POST['data']) && isset($_SESSION['username'])) {
-		$data = json_decode($_POST['data']);
-		
+	if(isset($_POST['pwd']) && isset($_SESSION['username'])) {
 		#array with information that can be inserted into the configuration:
-		$replacements = array('#USER#'=>$_SESSION['username'],'#PASSWORD#'=>'InvalidPassword');
+		$replacements = array('#USER#'=>$_SESSION['username'],'#PASSWORD#'=>$_POST['pwd']);
+		
+		
 		
 		#TODO: perhaps check the username/password with an AD bind.
+		
+		#Clean the password from memory
+		cleanmem($_POST['pwd']);
 
 		#Copy the $connection array and replace values in it:
 		$tokenArray = $connection;
@@ -120,10 +144,7 @@ if(isset($_REQUEST['createToken'])) {
 		});
 		if(isset($_SESSION['token'])) {
 			$response = array('status'=>'ok');
-			$response['apps'] = array();
-			foreach($connection['connections'] as $name=>$conf) {
-				$response['apps'][] = array("name"=>$name,'icon'=>$conf['parameters']['icon']);
-			}
+			$response['apps'] = getApps();
 			
 			echo json_encode($response);
 			exit();
@@ -142,16 +163,61 @@ if(isset($_REQUEST['getConfig'])) {
 		"haveToken" => isset($_SESSION['token']),
 	);
 	if(isset($_SESSION['token'])) {
-		$response['apps'] = array();
-		foreach($connection['connections'] as $name=>$conf) {
-			$response['apps'][] = array("name"=>$name,'icon'=>$conf['parameters']['icon']);
-		}
+		$response['apps'] = getApps();
 	}
 
 	echo json_encode($response);
 	exit();
 }
 
+if(isset($_REQUEST['openSession'])) {
+	
+	header('Content-Type: application/json');
+	$response = array(
+		"status" => 'ok',
+		"GT"=>false
+	);
+	
+	#@todo: hardcoded api URL
+	$apiUrl = "http://127.0.0.1:8080/guacamole/api/tokens";
+	
+	#Check if client has valid session key:
+	if(isset($_POST['authToken'])) {
+		$ch = curl_init( $apiUrl );
+		$payload = 'token='.urlencode($_POST['authToken']);
+		curl_setopt( $ch, CURLOPT_POSTFIELDS, $payload );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+		$result = curl_exec($ch);
+		curl_close($ch);
+		$res = json_decode($result,true);
+		if($_POST['authToken'] == $res['authToken']) {
+			#The session is still valid:
+			echo json_encode($response);
+			exit();
+		}
+	}
+	
+	
+	#Create guacamole session:
+	#Post to the guacamole api to exchange the full encrypted token for a session token: (passes protected local network)
+	$ch = curl_init( $apiUrl );
+	$payload = 'data='.urlencode($_SESSION['token']);
+	curl_setopt( $ch, CURLOPT_POSTFIELDS, $payload );
+	curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+	$result = curl_exec($ch);
+	curl_close($ch);
+	$res = json_decode($result,true);
+	if(!isset($res['authToken'])) {
+		#No authToken received from API: cannot login
+		$response['status'] = 'token_fail';
+	} else {
+		#We Succesfully created a guacSession:
+		$response['GT'] = $result;
+	}
+	
+	echo json_encode($response);
+	exit();
+}
 
 
 
@@ -202,14 +268,11 @@ if(isset($_REQUEST['getConfig'])) {
 			padding: 0.5em;
 			width: 8em;
 		}
-		</style>
-
-		<script src='/log.js'></script>
-		
+		</style>	
     </head>
     <body>
         <div id="UI">
-			<form id="logonUI" class="loginform" action="/" title="Your password is required for secure apps">
+			<form method="post" id="logonUI" class="loginform" action="/" title="Your password is required for secure apps">
 				<h3 id="displayname">&nbsp;</h3>
 				<div class="shield">
 				<span class="iconify largeicon" data-icon="mdi-shield-lock-outline">Password:</span>
