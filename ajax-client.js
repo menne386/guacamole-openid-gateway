@@ -1,12 +1,4 @@
-// Copyright (c) Brock Allen & Dominick Baier. All rights reserved.
-// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
 
-
-///////////////////////////////
-// OidcClient config
-///////////////////////////////
-Oidc.Log.logger = console;
-Oidc.Log.level = Oidc.Log.INFO;
 
 var client;
 
@@ -46,85 +38,39 @@ function openurl(url) {
 	window.location = url;
 }
 
-///////////////////////////////
-// functions for UI elements
-///////////////////////////////
-function signin() {
-    client.createSigninRequest({ state: { bar: 15 } }).then(function(req) {
-        log("signin request", req, "<a href='" + req.url + "'>go signin</a>");
-		openurl(req.url);
-    }).catch(function(err) {
-        log(err);
-    });
-}
-
-var signinResponse;
-function processSigninResponse() {
-	return new Promise(function (resolve, reject) {
-		client.processSigninResponse().then(function(response) {
-			log("signin response", response);
-			resolve(response);
-		}).catch(function(err) {
-			reject(err);
-		});
-	});
-}
-
-function signout() {
-    client.createSignoutRequest({ id_token_hint: signinResponse && signinResponse.id_token, state: { foo: 5 } }).then(function(req) {
-        log("signout request", req, "<a href='" + req.url + "'>go signout</a>");
-		openurl(req.url);
-    });
-}
-
-function processSignoutResponse() {
-    client.processSignoutResponse().then(function(response) {
-        signinResponse = null;
-        log("signout response", response);
-    }).catch(function(err) {
-        log(err);
-    });
-}
-
-async function doAuthentication() {
+async function main() {
 	
-	var settingsOutput = await makeRequest("GET","./?getConfig");
+	var settingsOutput = await makeRequest("GET","/?getConfig");
 	var settings = JSON.parse(settingsOutput);
 	console.log(settings);
-	client = new Oidc.OidcClient(settings.oidc);
-
-	if (window.location.href.indexOf("#") >= 0) {
-		signinResponse = await processSigninResponse();
-		sessionStorage.setItem('_userInfo',JSON.stringify(signinResponse));
-		window.location = "./";
-	} else if (window.location.href.indexOf("?") >= 0) {
-		processSignoutResponse();
-	}
 	
-	var _userInfo = sessionStorage.getItem('_userInfo');
-	if(_userInfo) {
-		signinResponse = JSON.parse(_userInfo);
-		//console.log(signinResponse);
+	var logonUI = document.querySelector("#logonUI");
+	var pwd = document.querySelector("#passwordentry");
+	var displayName = document.querySelector("#displayname");
+
+	if(settings.haveUser) {
+		displayName.innerHTML = settings.displayname;
 		
-		document.querySelector("#displayname").innerHTML = signinResponse.profile.given_name;
-		var pwd = document.querySelector("#passwordentry");
 		pwd.removeAttribute('readonly');
 		pwd.removeAttribute('placeholder');
 		
-		if(settings.haveToken) {
-			renderAppList(settings);
+		logonUI.onsubmit = function(){
+			createNewToken();
+			return false;
 		}
-		//console.log(document.querySelector("#displayname"));
-		//log(signinResponse);
 	} else {
-		log("Waiting for login");
-		
+		pwd.style.display = "none";
+		logonUI.title = "Click to authenticate with Microsoft";
+		logonUI.target = "__logonTab";
+		logonUI.onclick = function() {
+			logonUI.submit();
+		}
 	}
-	var _didSignin = sessionStorage.getItem('_didSignin');
-	if(!_didSignin) {
-		sessionStorage.setItem('_didSignin','true');
-		signin();
-	}	
+	
+	if(settings.haveToken) {
+		renderAppList(settings);
+	}
+
 }
 
 function renderAppList(resultObj) {
@@ -171,8 +117,8 @@ async function createNewToken() {
 	var UI = document.querySelector("#UI");
 	pwd.disabled = true;
 	var fd = new FormData();
-	fd.set('data', JSON.stringify({'token': signinResponse,'pwd': pwd.value}));
-	var result = await makeRequest("POST","./?createToken",fd);
+	fd.set('data', JSON.stringify({'pwd': pwd.value}));
+	var result = await makeRequest("POST","/?createToken",fd);
 	//console.log(result);
 	var resultObj = JSON.parse(result);
 	if(resultObj.status=='ok') {
@@ -183,6 +129,6 @@ async function createNewToken() {
 	pwd.disabled = false;
 }
 
-doAuthentication();
+main();
 
 
